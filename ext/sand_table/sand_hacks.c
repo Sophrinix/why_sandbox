@@ -10,6 +10,19 @@
  */
 #include "sand_table.h"
  
+/* cannot use ordinary CLASS_OF as it does not return an lvalue */
+#define KLASS_OF(c) (RBASIC(c)->klass)
+
+
+# define RCLASS_M_TBL(c) (RCLASS(c)->m_tbl)
+# define RCLASS_SUPER(c) (RCLASS(c)->super)
+# define RCLASS_IV_TBL(c) (RCLASS(c)->ptr->iv_tbl)
+
+ 
+
+ 
+
+
 #define HAS_IVTBL(o, v) \
   char v = 0; \
   switch (TYPE(o)) { \
@@ -32,15 +45,39 @@ VALUE
 sandbox_module_new(kit)
   sandkit *kit;
 {
+	/** reference
   NEWOBJ(mdl, struct RClass);
   OBJSETUP(mdl, kit->cModule, T_MODULE);
-  
-  mdl->super = 0;
-  mdl->iv_tbl = 0;
+  **/
+
+ rb_classext_t *ext = ALLOC(rb_classext_t);
+    NEWOBJ(mdl, struct RClass);
+    OBJSETUP(mdl, kit->cModule, T_MODULE);
+    mdl->ptr = ext;
+    RCLASS(mdl)->ptr->iv_tbl = 0;
+    RCLASS_M_TBL(mdl) = 0;
+    RCLASS(mdl)->ptr->super = 0;
+    RCLASS_IV_INDEX_TBL(mdl) = 0;
+    //return (VALUE)mdl;
+
+/** old crap**
+mdl->ptr =ext;
+  //RCLASS_IV_TBL(mdl) = 0;
+  RCLASS_M_TBL(mdl) = 0;
+  / *maybe I am an idiot here, but im going to try to set this to st_init_numtable(). I don't know if 1.9 has this*/
+  RCLASS_M_TBL(mdl)=st_init_numtable();
+/** 
+ RCLASS_SUPER(mdl) =0;
+  RCLASS_IV_INDEX_TBL(mdl)=0;
+
+/**
+mdl->super = 0;
+  mdl->iv_index_tbl = 0;
   mdl->m_tbl = 0;
   mdl->m_tbl = st_init_numtable();
-  
-  return (VALUE)mdl;
+  **/
+  return (VALUE)mdl; 
+
 }
 
 VALUE
@@ -77,12 +114,18 @@ sandbox_boot(kit, super)
 {
   NEWOBJ(klass, struct RClass);
   OBJSETUP(klass, kit->cClass, T_CLASS);
-      
-  klass->super = super;
-  klass->iv_tbl = 0;
-  klass->m_tbl = 0;       /* safe GC */
-  klass->m_tbl = st_init_numtable();
+  RCLASS_IV_TBL(klass) = 0;
+  RCLASS(klass)->ptr->super= super;
+  RCLASS_M_TBL(klass)=0;
+  RCLASS_M_TBL(klass)= st_init_numtable(); 
   
+/*
+  klass->super = super;
+  klass->iv_index_tbl = 0;
+  klass->m_tbl = 0;       /* safe GC * /
+  klass->m_tbl = st_init_numtable();
+ **/
+
   OBJ_INFECT(klass, super);
   return (VALUE)klass;
 }
@@ -98,7 +141,7 @@ sandbox_metaclass(kit, obj, super)
   rb_singleton_class_attached(klass, obj);
   if (BUILTIN_TYPE(obj) == T_CLASS && FL_TEST(obj, FL_SINGLETON)) {
     RBASIC(klass)->klass = klass;
-    RCLASS(klass)->super = RBASIC(rb_class_real(RCLASS(obj)->super))->klass;
+    RCLASS(klass)->ptr->super = RBASIC(rb_class_real(RCLASS(obj)->ptr->super))->klass;
   }
   else {
     VALUE metasuper = RBASIC(rb_class_real(super))->klass;
@@ -192,7 +235,7 @@ sandbox_defclass_under(kit, outer, name, super)
     if (TYPE(klass) != T_CLASS) {
         rb_raise(rb_eTypeError, "%s is not a class", rb_obj_classname(klass));
     }
-    if (rb_class_real(RCLASS(klass)->super) != super) {
+    if (rb_class_real(RCLASS(klass)->ptr->super) != super) {
         rb_name_error(id, "%s is already defined", name);
     }
     return klass;
@@ -302,11 +345,11 @@ sandbox_link_class(c, kitc)
   HAS_IVTBL(kitc, has_tbl);
   if (!has_tbl) return;
 
-  if (!ROBJECT(kitc)->iv_tbl) {
-    ROBJECT(kitc)->iv_tbl = st_init_numtable();
+  if (!ROBJECT(kitc)->as.heap.iv_index_tbl) {
+    ROBJECT(kitc)->as.heap.iv_index_tbl = st_init_numtable();
   }
-  st_insert(ROBJECT(kitc)->iv_tbl, rb_intern("__link__"), c);
-  st_insert(ROBJECT(kitc)->iv_tbl, rb_intern("__box__"), ruby_sandbox);
+  st_insert(ROBJECT(kitc)->as.heap.iv_index_tbl, rb_intern("__link__"), c);
+  st_insert(ROBJECT(kitc)->as.heap.iv_index_tbl, rb_intern("__box__"), ruby_sandbox);
 }
 
 VALUE
@@ -317,8 +360,8 @@ sandbox_get_linked_class(kitc)
   HAS_IVTBL(kitc, has_tbl);
   if (!has_tbl) return c;
 
-  if (ROBJECT(kitc)->iv_tbl) {
-    st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__link__"), &c);
+  if (ROBJECT(kitc)->as.heap.iv_index_tbl) {
+    st_lookup(ROBJECT(kitc)->as.heap.iv_index_tbl, rb_intern("__link__"), &c);
   }
   return c;
 }
@@ -331,8 +374,8 @@ sandbox_get_linked_box(kitc)
   HAS_IVTBL(kitc, has_tbl);
   if (!has_tbl) return c;
 
-  if (ROBJECT(kitc)->iv_tbl) {
-    st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__box__"), &c);
+  if (ROBJECT(kitc)->as.heap.iv_index_tbl) {
+    st_lookup(ROBJECT(kitc)->as.heap.iv_index_tbl, rb_intern("__box__"), &c);
   }
   return c;
 }
@@ -429,7 +472,7 @@ sandbox_import_class_path(kit, path, link)
     if (!rb_const_defined(kitc, id)) {
       VALUE super = kit->cBoxedClass;
       if (!link) {
-        super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->super), link);
+        super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->ptr->super), link);
       }
       if (kitc == kit->cObject) {
         if (link) {
@@ -459,9 +502,9 @@ sandbox_import_class_path(kit, path, link)
     }
     switch (TYPE(c)) {
       case T_CLASS:
-        if (!link && 0 != rb_str_cmp(rb_class_name(RCLASS(c)->super), rb_class_name(RCLASS(kitc)->super)))
+        if (!link && 0 != rb_str_cmp(rb_class_name(RCLASS(c)->ptr->super), rb_class_name(RCLASS(kitc)->ptr->super)))
         {
-          rb_raise(rb_eTypeError, "superclass mismatch for class %s", rb_class2name(RCLASS(c)->super));
+          rb_raise(rb_eTypeError, "superclass mismatch for class %s", rb_class2name(RCLASS(c)->ptr->super));
         }
       case T_MODULE:
         if (!link) {

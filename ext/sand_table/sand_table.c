@@ -141,7 +141,7 @@ mark_sandbox(kit)
 
 static VALUE
 sandbox_save(thread)
-  rb_thread_t thread;
+rb_thread_t *thread;
 {
   if (NIL_P(thread->sandbox))
   {

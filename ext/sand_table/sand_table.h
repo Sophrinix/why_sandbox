@@ -16,10 +16,10 @@
 
 #include <ruby.h>
 #include <rubysig.h>
-#include <st.h>
-#include <env.h>
-#include <node.h>
-#include <version.h>
+#include <ruby/st.h>
+#include <ruby/env.h>
+#include <ruby/node.h>
+#include <ruby/version.h>
 
 extern VALUE ruby_sandbox;
 extern st_table *rb_class_tbl;
@@ -44,7 +44,7 @@ static inline VALUE *rb_ary_ptr(VALUE s) {return  RARRAY(s)->ptr;}
 #endif 
 
 #if RUBY_VERSION_CODE <= 185
-#warning "** Sandbox will NOT compile without a patched 1.8.5 -- Proceeding anyway! **"
+//#warning "** Sandbox will NOT compile without a patched 1.8.5 -- Proceeding anyway! **"
 #endif
 
 #if RUBY_VERSION_CODE > 190
